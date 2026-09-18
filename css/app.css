@@ -307,6 +307,7 @@ main {
   text-align: center;
   line-height: 1.35;
   max-width: calc(100% - 280px);
+  margin-left: 48px;
   opacity: 1;
   transition: opacity 0.7s ease-out;
 }
