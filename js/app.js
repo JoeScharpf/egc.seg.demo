@@ -242,32 +242,45 @@
     return origin === "runet" || origin === "rules" || origin === "gt";
   }
 
+  function leadLabel() {
+    var c = currentCase();
+    if (!c) return null;
+    var name = c.waveform || c.id || "";
+    var m = String(name).match(/_lead_([^.]+)/i);
+    return m ? m[1] : null;
+  }
+
+  function withLead(text) {
+    var lead = leadLabel();
+    return lead ? "Lead " + lead + " · " + text : text;
+  }
+
   function captionText() {
     var open = MTIntervals.pending(state.intervals);
     var miou;
     if (open) {
-      return "Click the end of this " + open.wave + " interval.";
+      return withLead("Click the end of this " + open.wave + " interval.");
     }
     if (state.origin === "runet") {
       miou = draftMiou("runet");
-      return (
+      return withLead(
         "R-U-Net draft" +
-        (miou ? " · Mean IoU " + miou : "") +
-        ". Hover a band and click × to delete, or click the trace to add."
+          (miou ? " · Mean IoU " + miou : "") +
+          ". Hover a band and click × to delete, or click the trace to add."
       );
     }
     if (state.origin === "rules") {
       miou = draftMiou("rules");
-      return (
+      return withLead(
         "Rules draft" +
-        (miou ? " · Mean IoU " + miou : "") +
-        ". Hover a band and click × to delete, or click the trace to add."
+          (miou ? " · Mean IoU " + miou : "") +
+          ". Hover a band and click × to delete, or click the trace to add."
       );
     }
     if (state.origin === "gt") {
-      return "Ground truth.";
+      return withLead("Ground truth.");
     }
-    return "Click to annotate";
+    return withLead("Click to annotate");
   }
 
   function updateCaption() {
