@@ -23,6 +23,7 @@
     playMode: null,
     hoverHit: -1,
     captionGen: 0,
+    submittedMiou: null,
   };
 
   function $(id) {
@@ -134,6 +135,7 @@
     var plot = $("anno-plot");
     state.intervals = [];
     state.origin = null;
+    state.submittedMiou = null;
     state.shouldPlay = false;
     hideBandDelete();
     if (plot) {
@@ -280,6 +282,9 @@
     if (state.origin === "gt") {
       return withLead("Ground truth.");
     }
+    if (state.submittedMiou != null) {
+      return withLead("Your labels · Mean IoU " + state.submittedMiou + ".");
+    }
     return withLead("Click to annotate");
   }
 
@@ -397,6 +402,7 @@
     if (!list.length) return;
     state.caseIndex = (state.caseIndex + 1) % list.length;
     state.shouldPlay = true;
+    state.submittedMiou = null;
     hideBandDelete();
     if (isDraftOrigin(state.origin)) {
       applyDraft();
@@ -411,9 +417,38 @@
     renderAnno();
   }
 
+  function submitLabels() {
+    var c = currentCase();
+    var complete;
+    var labels;
+    var miou;
+    if (!c || !c.gt) return;
+    if (MTIntervals.pending(state.intervals)) {
+      state.submittedMiou = null;
+      updateCaption();
+      return;
+    }
+    complete = state.intervals.filter(function (iv) {
+      return iv && iv.end != null;
+    });
+    if (!complete.length) {
+      state.submittedMiou = null;
+      updateCaption();
+      return;
+    }
+    labels = MTIntervals.intervalsToLabels(complete, c.gt.length);
+    miou = MTIntervals.meanIoU(labels, c.gt);
+    state.submittedMiou = formatMiou(miou);
+    state.origin = "manual";
+    setActive(["draft-rules", "draft-runet", "draft-gt"], "");
+    updateCaption();
+    setCta("on");
+  }
+
   function applyDraft(bandsOnly) {
     var c = currentCase();
     if (!c) return;
+    state.submittedMiou = null;
     if (state.draft === "runet") {
       state.intervals = MTIntervals.labelsToIntervals(c.boundary_mt_unet);
       state.origin = "runet";
@@ -464,6 +499,9 @@
     $("reset-anno").addEventListener("click", function () {
       playReverseBands();
     });
+    $("submit-anno").addEventListener("click", function () {
+      submitLabels();
+    });
     $("new-example").addEventListener("click", function () {
       nextExample();
     });
@@ -513,6 +551,7 @@
       if (hit < 0 || hit >= state.intervals.length) return;
       state.intervals.splice(hit, 1);
       state.origin = "manual";
+      state.submittedMiou = null;
       state.shouldPlay = false;
       hideBandDelete();
       render();
@@ -535,6 +574,7 @@
       }
       MTIntervals.clickAt(state.intervals, state.wave, idx);
       state.origin = "manual";
+      state.submittedMiou = null;
       state.shouldPlay = false;
       render();
     });
