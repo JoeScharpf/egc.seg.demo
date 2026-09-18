@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ECG Delineation with Deep Learning</title>
-  <link rel="stylesheet" href="css/app.css?v=46">
+  <link rel="stylesheet" href="css/app.css?v=48">
 </head>
 <body>
   <header>
@@ -56,12 +56,13 @@
           </svg>
         </button>
         <div id="anno-cta" class="anno-cta" hidden>
-          <span class="anno-cta-text">Click to annotate</span>
           <div class="seg anno-wave" role="group" aria-label="Wave">
             <button type="button" id="wave-P" class="active">P</button>
             <button type="button" id="wave-QRS">QRS</button>
             <button type="button" id="wave-T">T</button>
           </div>
+          <span class="anno-cta-text">Click to annotate</span>
+          <button type="button" id="submit-anno" class="play anno-submit">Submit</button>
         </div>
       </div>
     </section>
@@ -69,9 +70,9 @@
 
   <script src="vendor/plotly.min.js"></script>
   <script src="data/test.js?v=4"></script>
-  <script src="js/intervals.js?v=2"></script>
+  <script src="js/intervals.js?v=3"></script>
   <script src="js/pan_tompkins.js?v=1"></script>
   <script src="js/charts.js?v=17"></script>
-  <script src="js/app.js?v=37"></script>
+  <script src="js/app.js?v=38"></script>
 </body>
 </html>

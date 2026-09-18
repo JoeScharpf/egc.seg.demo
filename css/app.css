@@ -306,7 +306,7 @@ main {
   color: var(--ink);
   text-align: center;
   line-height: 1.35;
-  max-width: calc(100% - 200px);
+  max-width: calc(100% - 280px);
   opacity: 1;
   transition: opacity 0.7s ease-out;
 }
@@ -316,6 +316,13 @@ main {
 }
 
 .anno-wave {
+  position: absolute;
+  left: var(--plot-ml);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.anno-submit {
   position: absolute;
   right: var(--plot-mr);
   top: 50%;
