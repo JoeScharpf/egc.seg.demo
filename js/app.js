@@ -142,7 +142,7 @@
     }
     renderChips();
     setActive(["wave-P", "wave-QRS", "wave-T"], "wave-" + state.wave);
-    setActive(["draft-rules", "draft-runet"], "");
+    setActive(["draft-rules", "draft-runet", "draft-gt"], "");
     updateCaption();
     setCta("on");
   }
@@ -218,16 +218,54 @@
     });
   }
 
+  function formatMiou(value) {
+    if (value == null || !isFinite(value)) return null;
+    return Number(value).toFixed(2);
+  }
+
+  function draftMiou(origin) {
+    var c = currentCase();
+    if (!c || !c.sample_mean_iou) return null;
+    if (origin === "runet") return formatMiou(c.sample_mean_iou.boundary_mt_unet);
+    if (origin === "rules") return formatMiou(c.sample_mean_iou.rules);
+    return null;
+  }
+
+  function draftButtonId(origin) {
+    if (origin === "rules") return "draft-rules";
+    if (origin === "runet") return "draft-runet";
+    if (origin === "gt") return "draft-gt";
+    return "";
+  }
+
+  function isDraftOrigin(origin) {
+    return origin === "runet" || origin === "rules" || origin === "gt";
+  }
+
   function captionText() {
     var open = MTIntervals.pending(state.intervals);
+    var miou;
     if (open) {
       return "Click the end of this " + open.wave + " interval.";
     }
     if (state.origin === "runet") {
-      return "R-U-Net draft. Hover a band and click × to delete, or click the trace to add.";
+      miou = draftMiou("runet");
+      return (
+        "R-U-Net draft" +
+        (miou ? " · Mean IoU " + miou : "") +
+        ". Hover a band and click × to delete, or click the trace to add."
+      );
     }
     if (state.origin === "rules") {
-      return "Rules draft. Hover a band and click × to delete, or click the trace to add.";
+      miou = draftMiou("rules");
+      return (
+        "Rules draft" +
+        (miou ? " · Mean IoU " + miou : "") +
+        ". Hover a band and click × to delete, or click the trace to add."
+      );
+    }
+    if (state.origin === "gt") {
+      return "Ground truth.";
     }
     return "Click to annotate";
   }
@@ -265,7 +303,7 @@
       btn.addEventListener("click", function () {
         state.caseIndex = i;
         state.shouldPlay = true;
-        if (state.origin === "runet" || state.origin === "rules") {
+        if (isDraftOrigin(state.origin)) {
           applyDraft();
         } else {
           state.intervals = [];
@@ -318,12 +356,8 @@
     renderChips();
     setActive(["wave-P", "wave-QRS", "wave-T"], "wave-" + state.wave);
     setActive(
-      ["draft-rules", "draft-runet"],
-      state.origin === "rules"
-        ? "draft-rules"
-        : state.origin === "runet"
-          ? "draft-runet"
-          : ""
+      ["draft-rules", "draft-runet", "draft-gt"],
+      draftButtonId(state.origin)
     );
     updateCaption();
     if (ctaIsShown()) setCta("on");
@@ -351,7 +385,7 @@
     state.caseIndex = (state.caseIndex + 1) % list.length;
     state.shouldPlay = true;
     hideBandDelete();
-    if (state.origin === "runet" || state.origin === "rules") {
+    if (isDraftOrigin(state.origin)) {
       applyDraft();
     } else {
       state.intervals = [];
@@ -370,6 +404,9 @@
     if (state.draft === "runet") {
       state.intervals = MTIntervals.labelsToIntervals(c.boundary_mt_unet);
       state.origin = "runet";
+    } else if (state.draft === "gt") {
+      state.intervals = MTIntervals.labelsToIntervals(c.gt);
+      state.origin = "gt";
     } else {
       state.intervals = PanTompkins.detect(c.ecg, FS);
       state.origin = "rules";
@@ -382,8 +419,8 @@
     renderChips();
     setActive(["wave-P", "wave-QRS", "wave-T"], "wave-" + state.wave);
     setActive(
-      ["draft-rules", "draft-runet"],
-      state.origin === "rules" ? "draft-rules" : "draft-runet"
+      ["draft-rules", "draft-runet", "draft-gt"],
+      draftButtonId(state.origin)
     );
     updateCaption();
     setCta("on");
@@ -405,6 +442,10 @@
     });
     $("draft-runet").addEventListener("click", function () {
       state.draft = "runet";
+      applyDraft(true);
+    });
+    $("draft-gt").addEventListener("click", function () {
+      state.draft = "gt";
       applyDraft(true);
     });
     $("reset-anno").addEventListener("click", function () {

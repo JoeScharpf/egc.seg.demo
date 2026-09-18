@@ -37,6 +37,8 @@ T = 2500
 # Five clean strips, plus two readable failures (missed P, missed T)
 # mixed into the New example cycle. Skip old Typical (aVR) and Hard (no P).
 DEMO_CASE_INDICES = [432, 1, 85, 338, 220, 109, 158]
+FS = 250
+WAVE_TO_CLASS = {"P": 1, "QRS": 2, "T": 3}
 
 
 def load_waveform(path: Path, target_length: int = 2500) -> np.ndarray:
@@ -356,6 +358,79 @@ def _sample_mean_iou(pred: np.ndarray, gt: np.ndarray) -> float:
     return float(np.mean(class_ious)) if class_ious else 0.0
 
 
+def _pan_tompkins_intervals(ecg: np.ndarray, fs: int = FS) -> list[dict]:
+    """Match demo/js/pan_tompkins.js: R peaks, then fixed P/QRS/T windows."""
+    lead = np.asarray(ecg, dtype=np.float64).ravel()
+    n = len(lead)
+    if n == 0:
+        return []
+
+    def ms(t: float) -> int:
+        return int(round(t * fs))
+
+    d = np.zeros(n, dtype=np.float64)
+    for i in range(2, n - 2):
+        d[i] = (-lead[i - 2] - 2 * lead[i - 1] + 2 * lead[i + 1] + lead[i + 2]) / 8
+
+    w = max(1, ms(0.15))
+    mwi = np.zeros(n, dtype=np.float64)
+    acc = 0.0
+    for i in range(n):
+        acc += d[i] * d[i]
+        if i >= w:
+            acc -= d[i - w] * d[i - w]
+        mwi[i] = acc / w
+
+    thr = 0.3 * float(mwi.max()) if n else 0.0
+    refr = ms(0.2)
+    r_peaks: list[int] = []
+    for i in range(1, n - 1):
+        if (
+            mwi[i] > thr
+            and mwi[i] >= mwi[i - 1]
+            and mwi[i] > mwi[i + 1]
+            and (not r_peaks or i - r_peaks[-1] > refr)
+        ):
+            a = max(0, i - ms(0.13))
+            b = min(n - 1, i + ms(0.02))
+            r_peaks.append(int(a + np.argmax(np.abs(lead[a : b + 1]))))
+
+    def clip(x: int) -> int:
+        return max(0, min(n - 1, x))
+
+    out: list[dict] = []
+    for r in r_peaks:
+        half_qrs = ms(0.045)
+        out.append({"wave": "QRS", "start": clip(r - half_qrs), "end": clip(r + half_qrs)})
+        if r - ms(0.08) > 0:
+            a = r - ms(0.25)
+            b = r - ms(0.08)
+            c = int(a + np.argmax(np.abs(lead[a : b + 1])))
+            half = ms(0.04)
+            out.append({"wave": "P", "start": clip(c - half), "end": clip(c + half)})
+        if r + ms(0.36) < n:
+            a = r + ms(0.10)
+            b = r + ms(0.36)
+            c = int(a + np.argmax(np.abs(lead[a : b + 1])))
+            half = ms(0.06)
+            out.append({"wave": "T", "start": clip(c - half), "end": clip(c + half)})
+    return out
+
+
+def _intervals_to_labels(intervals: list[dict], length: int) -> np.ndarray:
+    # Paint P, then T, then QRS so QRS wins overlaps (exclusive labels for mIoU).
+    labels = np.zeros(length, dtype=np.int64)
+    for wave in ("P", "T", "QRS"):
+        class_id = WAVE_TO_CLASS[wave]
+        for iv in intervals:
+            if iv["wave"] != wave:
+                continue
+            a = min(iv["start"], iv["end"])
+            b = max(iv["start"], iv["end"])
+            labels[a : b + 1] = class_id
+    return labels
+
+
 def build_test_cases() -> dict:
     samples_path = EXPORT / "source_metadata" / "test_samples.csv"
     with samples_path.open(encoding="utf-8") as handle:
@@ -374,6 +449,10 @@ def build_test_cases() -> dict:
         waveform_name = sample["waveform"]
         gt = np.asarray(gt_all[index], dtype=np.int64)
         pred = {name: np.asarray(arr[index], dtype=np.int64) for name, arr in preds.items()}
+        ecg = load_waveform(ECG_DIR / waveform_name)
+        rules_labels = _intervals_to_labels(_pan_tompkins_intervals(ecg), len(ecg))
+        sample_mean_iou = {name: _sample_mean_iou(pred[name], gt) for name in pred}
+        sample_mean_iou["rules"] = _sample_mean_iou(rules_labels, gt)
         cases.append(
             {
                 "id": Path(waveform_name).stem,
@@ -381,10 +460,8 @@ def build_test_cases() -> dict:
                 "test_index": index,
                 "waveform": waveform_name,
                 "patient_id": int(sample["ID"]),
-                "sample_mean_iou": {
-                    name: _sample_mean_iou(pred[name], gt) for name in pred
-                },
-                "ecg": round_array(load_waveform(ECG_DIR / waveform_name)),
+                "sample_mean_iou": sample_mean_iou,
+                "ecg": round_array(ecg),
                 "gt": gt.tolist(),
                 "supervised_fcn": pred["supervised_fcn"].tolist(),
                 "supervised_unet": pred["supervised_unet"].tolist(),
